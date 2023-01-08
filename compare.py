@@ -1,5 +1,4 @@
 import ast
-import astor
 import argparse
 import os
 import sys
@@ -84,7 +83,7 @@ class Tree:
     def code_preprocessing(self) -> str:
         """ Preprocess the tree and return the code. """
         parsed = self.delete_doc_and_rename_vars()
-        return astor.to_source(parsed)
+        return ast.unparse(parsed)
 
 
 class Antiplagiarism:
