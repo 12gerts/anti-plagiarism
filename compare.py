@@ -15,11 +15,13 @@ def is_exist(path):
 
 
 def read(filename):
+    """ Gives data from a file. """
     with open(filename, "r", encoding='utf-8') as f:
         return f.read()
 
 
 def get_read_pointer(filename):
+    """ Gives a pointer to read the file """
     return open(filename, "r", encoding='utf-8')
 
 
@@ -42,16 +44,27 @@ class Parser:
         arguments = parser.parse_args()
         return is_exist(arguments.input), arguments.output
 
-# 0.9765828274067649
+
 class Tree:
-    def __init__(self, code):
-        self.parsed = ast.parse(code)
+    def __init__(self, filenames):
+        self.parsed = [ast.parse(read(filenames[0])), ast.parse(read(filenames[1]))]
+        self.mode = 0
         self.variables = []
 
-    def delete_docstring(self):
-        for node in ast.walk(self.parsed):
+    def delete_doc_and_rename_vars(self) -> ast:
+        """ Remove comments, docstrings and rename variables when similar. """
+        iterator = 0
+        for node in ast.walk(self.parsed[self.mode]):
             if isinstance(node, ast.Name):
                 node.id = node.id.lower().replace('_', '')
+                if self.mode == 0:
+                    self.variables.append(node.id)
+                if self.mode == 1 and iterator != len(self.variables):
+                    if node.id.startswith(self.variables[iterator]) or self.variables[iterator].startswith(node.id):
+                        node.id = self.variables[iterator]
+                    elif levenstein(node.id, self.variables[iterator]) == 1:
+                        node.id = self.variables[iterator]
+                    iterator += 1
 
             if not isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
                 continue
@@ -66,13 +79,11 @@ class Tree:
                 continue
 
             node.body = node.body[1:]
-        return self.parsed
+        return self.parsed[self.mode]
 
-    def get_code_syntax_tree(self) -> str:
-        parsed = self.delete_docstring()
-
-        normalized_code = ast.dump(parsed, annotate_fields=True)
-        print(normalized_code)
+    def code_preprocessing(self) -> str:
+        """ Preprocess the tree and return the code. """
+        parsed = self.delete_doc_and_rename_vars()
         return astor.to_source(parsed)
 
 
@@ -89,40 +100,46 @@ class Antiplagiarism:
                 for file in filenames:
                     is_exist(file)
 
-                code_orig = Tree(read(filenames[0])).get_code_syntax_tree()
-                code_copy = Tree(read(filenames[1])).get_code_syntax_tree()
+                tree = Tree(filenames)
+                code_orig = tree.code_preprocessing()
+                tree.mode = 1
+                code_copy = tree.code_preprocessing()
 
-                distance = self.levenstein(code_orig, code_copy)
+                distance = levenstein(code_orig, code_copy)
 
                 similarity = 1 - (distance / len(code_orig))
-                w.write(str(similarity) + '\n')
+                w.write(f'{round(similarity, 3)}\n')
 
-    @staticmethod
-    def levenstein(str_1: str, str_2: str) -> int:
-        n, m = len(str_1), len(str_2)
-        if n > m:
-            str_1, str_2 = str_2, str_1
-            n, m = m, n
 
-        current_row = range(n + 1)
+def levenstein(str_1: str, str_2: str) -> int:
+    """ Count the Levenshtein distance. """
+    if str_1 == str_2:
+        return 0
 
-        for i in range(1, m + 1):
-            previous_row, current_row = current_row, [i] + [0] * n
+    n, m = len(str_1), len(str_2)
+    if n > m:
+        str_1, str_2 = str_2, str_1
+        n, m = m, n
 
-            for j in range(1, n + 1):
-                add, delete, change = previous_row[j] + 1, current_row[j - 1] + 1, previous_row[j - 1]
+    current_row = range(n + 1)
 
-                if str_1[j - 1] != str_2[i - 1]:
-                    change += 1
+    for i in range(1, m + 1):
+        previous_row, current_row = current_row, [i] + [0] * n
 
-                current_row[j] = min(add, delete, change)
+        for j in range(1, n + 1):
+            add, delete, change = previous_row[j] + 1, current_row[j - 1] + 1, previous_row[j - 1]
 
-        return current_row[n]
+            if str_1[j - 1] != str_2[i - 1]:
+                change += 1
+
+            current_row[j] = min(add, delete, change)
+
+    return current_row[n]
 
 
 def main():
-    apg = Antiplagiarism(Parser())
-    apg.handle_files()
+    antiplagiarism = Antiplagiarism(Parser())
+    antiplagiarism.handle_files()
 
 
 if __name__ == "__main__":
