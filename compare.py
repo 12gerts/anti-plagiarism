@@ -45,8 +45,8 @@ class Parser:
 
 
 class Tree:
-    def __init__(self, filenames):
-        self.parsed = [ast.parse(read(filenames[0])), ast.parse(read(filenames[1]))]
+    def __init__(self, file_1, file_2):
+        self.parsed = [ast.parse(read(file_1)), ast.parse(read(file_2))]
         self.mode = 0
         self.variables = []
 
@@ -99,7 +99,7 @@ class Antiplagiarism:
                 for file in filenames:
                     is_exist(file)
 
-                tree = Tree(filenames)
+                tree = Tree(filenames[0], filenames[1])
                 code_orig = tree.code_preprocessing()
                 tree.mode = 1
                 code_copy = tree.code_preprocessing()
